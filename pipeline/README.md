@@ -319,7 +319,7 @@ The matched MATLAB trajectory is written as the final `*_traj_m2DGaussian_cleane
 
 ## Validation scripts
 
-The output trajectory should be the same as manual and interactive analysis result produced by `spt.m`.
+The output trajectory should be the same as manual and interactive analysis result produced by `spt.m`. Note that the numbering of loci will not be the same following the automated pipeline and following the interactive script.
 
 | Script | Description |
 |--------|-------------|
