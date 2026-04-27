@@ -1,25 +1,6 @@
-# LIVEFISH Analysis Pipeline — v3
+# LIVEFISH Analysis Pipeline — v2.12
 
 Automated reference-trajectory extraction and single-particle tracking (SPT) pipeline for live-cell FISH imaging. Tracks DNA loci labelled with green (reference), red, and purple fluorophores across 30-frame time-lapse acquisitions.
-
-## Quick Start
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/chenxy19/OligoLiveFish.git
-cd OligoLiveFish/pipeline
-
-# 2. Install Python dependencies
-pip install -r requirements.txt
-
-# 3. Add MATLAB binary to PATH (add to ~/.zshrc to make permanent)
-export PATH="/Applications/MATLAB_R20XXx.app/bin:$PATH"
-
-# 4. Run
-python3 run_full_pipeline_v3.py /path/to/try_analysis
-```
-
-No other path configuration is needed. All MATLAB `.m` dependencies are bundled in `matlab_deps/` and added to MATLAB's path automatically by the script.
 
 ---
 
@@ -46,7 +27,7 @@ Stage 1  auto_roi_for_published_v2.12.py
          ↳ Detects green loci, tracks green/purple/red reference trajectories,
            saves per-locus reference CSVs.
 
-Stage 2  run_pipeline_v3.py
+Stage 2  run_pipeline_v2.py
          ↳ Calls MATLAB spt_batch.m on each channel TIFF → .mat files,
            then exports every MATLAB trajectory to CSV.
 
@@ -55,7 +36,7 @@ Stage 3  match_m2DGaussian_to_reference.py
            locus by spatial overlap, saves the cleaned final trajectory.
 ```
 
-The full pipeline (all three stages) is orchestrated by `run_full_pipeline_v3.py`. Multiple datasets can be processed simultaneously using `run_parallel_v2.12.py`.
+The full pipeline (all three stages) is orchestrated by `run_full_pipeline_v2.12.py`. Multiple datasets can be processed simultaneously using `run_parallel_v2.12.py`.
 
 ---
 
@@ -79,9 +60,18 @@ All other imports (`csv`, `math`, `pathlib`, `subprocess`, `struct`, `zipfile`, 
 
 ### External dependency
 
-**MATLAB** must be installed and on your `$PATH` (test with `matlab -batch "disp('ok')"`).
+**MATLAB** with the `spt_batch.m` Single Particle Tracking toolbox must be installed and accessible at:
 
-All required MATLAB `.m` files are bundled in `matlab_deps/` and added to MATLAB's search path automatically — no manual path configuration needed.
+```
+/Applications/MATLAB_R2026a.app/bin/matlab
+```
+
+The SPT toolbox directory is hardcoded in `run_pipeline_v2.py`:
+
+```python
+SPT_DIR       = Path('/Users/chenxinyi/Desktop/LIVEFISH analysis/Single Particle Tracking')
+SPT_TOOLS_DIR = SPT_DIR / 'Matlab Tools'
+```
 
 ---
 
@@ -105,9 +95,9 @@ All TIFFs must carry ImageJ-format metadata with `finterval` (frame interval in 
 | Script | Role |
 |--------|------|
 | `auto_roi_for_published_v2.12.py` | Stage 1 — reference trajectory extraction |
-| `run_pipeline_v3.py` | Stage 2 — MATLAB SPT + CSV export (uses bundled `matlab_deps/`) |
+| `run_pipeline_v2.py` | Stage 2 — MATLAB SPT + CSV export |
 | `match_m2DGaussian_to_reference.py` | Stage 3 — trajectory matching and final output |
-| `run_full_pipeline_v3.py` | Runs all three stages sequentially for one dataset |
+| `run_full_pipeline_v2.12.py` | Runs all three stages sequentially for one dataset |
 | `run_parallel_v2.12.py` | Runs all three stages in parallel for all 5 datasets |
 | `clean_outputs.py` | Deletes stale output CSVs before a fresh run |
 
@@ -118,16 +108,17 @@ All TIFFs must carry ImageJ-format metadata with `finterval` (frame interval in 
 ### Single dataset
 
 ```bash
-python3 run_full_pipeline_v3.py "<path_to_analysis_dir>"
+python3 run_full_pipeline_v2.12.py "<path_to_analysis_dir>"
 ```
 
 Example:
 
 ```bash
-python3 run_full_pipeline_v3.py "/path/to/FOV5_analyzed/try_analysis"
+python3 run_full_pipeline_v2.12.py \
+  "/Users/chenxinyi/Desktop/LIVEFISH analysis/published/published_3/FOV5_analyzed_1_copy12_count/try_analysis"
 ```
 
-A log file `log_trajectory_v3.txt` is written to the analysis directory.
+A log file `log_trajectory_v2.12.txt` is written to the analysis directory.
 
 ### All 5 datasets in parallel
 
@@ -236,7 +227,7 @@ All trajectory CSVs have three columns: `frame` (1-indexed), `x_nm`, `y_nm`.
 
 | File | Description |
 |------|-------------|
-| `log_trajectory_v3.txt` | Full console output from all three stages |
+| `log_trajectory_v2.12.txt` | Full console output from all three stages |
 
 ---
 
