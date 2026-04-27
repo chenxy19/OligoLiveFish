@@ -174,6 +174,41 @@ All tunable parameters are at the top of `auto_roi_for_published_v2.12.py`.
 | `MAX_BLOB_PX` | `120` | Connected-component area threshold (px) above which a blob is considered potentially merged. When 2 real signals are close to each other, they might be detected as a connected large "blob". This parameter detects overly large blobs, and elevate k_signal locally to try spliting the blob into real signal clusters. |
 | `_ADAPTIVE_K_STEPS` | `[1.0, 1.5, 2.0]` | Progressive k values tried to split a large blob into sub-components. The adaptive K_signal only applies locally, and to all time frames, without compromising the sensitivity to detect weaker signals in other areas of the same image. |
 
+### MATLAB SPT parameters (Stage 2)
+
+These parameters are set inside `spt_batch.m`. Two are read from TIFF metadata; one is auto-computed from the image data; the rest are fixed constants.
+
+**From TIFF metadata** (read by `run_pipeline_v3.py` and passed to MATLAB):
+
+| Parameter | Source | Description |
+|-----------|--------|-------------|
+| `f_rate` | `finterval` tag in ImageDescription | Frame rate (Hz) = 1 / finterval |
+| `pixl_um` | `XResolution` TIFF tag | Pixel size (µm/px) = 1 / XResolution |
+
+**Auto-thresholded from image data:**
+
+| Parameter | Formula | Description |
+|-----------|---------|-------------|
+| `thresh` | `mean(nz) + 0.5 × std(nz)` | Detection threshold, where `nz` = non-zero pixels of the band-pass filtered first frame (`bpass` filter, lp=1, bp=`dia+2`=7) |
+
+**Derived parameter:**
+
+| Parameter | Formula | Description |
+|-----------|---------|-------------|
+| `max_disp` | `round(3 × sqrt(4 × estD / f_rate) / pixl_um)` | Maximum allowed inter-frame displacement (px); set to 3 standard deviations of expected diffusive motion |
+
+**Fixed constants:**
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `dia` | `5` | Particle diameter (px, must be odd) |
+| `boxr` | `9` | Sub-pixel fitting window radius (px, must be odd) |
+| `mtl` | `3` | Minimum trajectory length (frames) |
+| `trackMem` | `3` | Frames a particle may blink off and still be linked |
+| `estD` | `0.001` | Estimated diffusion constant (µm²/s), used only to compute `max_disp` |
+| `fitmethod` | `0` | Fitting method: 0 = 2D Gaussian, 1 = centroid |
+| `IntTh` | `0` | Integrated intensity threshold (disabled) |
+
 ### Matching (Stage 3)
 
 | Parameter | Default | Description |
@@ -259,7 +294,14 @@ ROIs that overlap by more than `ADJACENCY_PX` pixels are grouped. Loci in the sa
 
 ### Stage 2 — MATLAB SPT
 
-MATLAB `spt_batch.m` runs 2D-Gaussian fitting on the full-field channel TIFFs to detect and link sub-diffraction spots independently of any ROI. Parameters are set automatically from the TIFF metadata. Each channel produces a `.mat` file whose trajectories are then exported to individual CSVs.
+MATLAB `spt_batch.m` runs 2D-Gaussian sub-pixel fitting on the full-field channel TIFFs to detect and link sub-diffraction spots independently of any ROI.
+
+1. **Band-pass filtering**: each frame is pre-filtered with `bpass` (low-pass 1 px, band-pass 7 px) to suppress camera noise and background.
+2. **Auto-thresholding**: the detection threshold is computed from the filtered first frame as `mean(nz) + 0.5 × std(nz)`, where `nz` is all non-zero filtered pixels. This adapts to per-dataset signal levels without manual tuning.
+3. **Spot detection**: candidate spots above threshold are localised with `pkfnd` and refined to sub-pixel precision using 2D Gaussian fitting (`pkRefnd`, window radius 9 px, particle diameter 5 px).
+4. **Linking**: detected positions are linked frame-to-frame into trajectories using a nearest-neighbour tracker (`track`) with a maximum displacement computed as 3 standard deviations of expected diffusive motion (`max_disp = round(3 × sqrt(4 × estD / f_rate) / pixl_um)`). A particle may blink off for up to 3 frames (`trackMem = 3`) and still be re-linked. Only trajectories spanning ≥ 3 frames (`mtl = 3`) are kept.
+
+Each channel produces a `.mat` file whose trajectories are exported to individual CSVs by `run_pipeline_v3.py`.
 
 ### Stage 3 — Trajectory matching
 
