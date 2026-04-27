@@ -1,6 +1,6 @@
-# LIVEFISH Analysis Pipeline — v3
+# OligoLIVEFISH Analysis Pipeline — v3
 
-Automated reference-trajectory extraction and single-particle tracking (SPT) pipeline for live-cell FISH imaging. Tracks DNA loci labelled with green (reference), red, and purple fluorophores across 30-frame time-lapse acquisitions.
+Automated reference trajectory extraction and single-particle tracking (SPT) pipeline for live-cell oligoLiveFISH imaging. Tracks DNA loci labelled with green (reference), red, and purple fluorophores across multi-timeframe time-lapse acquisitions.
 
 ## Quick Start
 
@@ -15,7 +15,7 @@ pip install -r requirements.txt
 # 3. Add MATLAB binary to PATH (add to ~/.zshrc to make permanent)
 export PATH="/Applications/MATLAB_R20XXx.app/bin:$PATH"
 
-# 4. Run
+# 4. Run (can use any of the try_analysis/ folder in example_data/)
 python3 run_full_pipeline_v3.py /path/to/try_analysis
 ```
 
@@ -55,7 +55,7 @@ Stage 3  match_m2DGaussian_to_reference.py
            locus by spatial overlap, saves the cleaned final trajectory.
 ```
 
-The full pipeline (all three stages) is orchestrated by `run_full_pipeline_v3.py`. Multiple datasets can be processed simultaneously using `run_parallel_v2.12.py`.
+The full pipeline (all three stages) is orchestrated by `run_full_pipeline_v3.py`. 
 
 ---
 
@@ -92,9 +92,9 @@ Each analysis directory must contain the following files with a common stem `<st
 | File | Description |
 |------|-------------|
 | `<stem>_Nucleus.tif` | Multi-frame nucleus channel (Hoechst/DAPI), used for nucleus boundary masking |
-| `<stem>_green.tif` | Multi-frame green channel (reference locus marker) |
-| `<stem>_red.tif` | Multi-frame red channel (locus of interest) |
-| `<stem>_purple.tif` | Multi-frame purple channel (locus of interest) |
+| `<stem>_green.tif` | Multi-frame green channel (DNA locus with the strongest signal).|
+| `<stem>_red.tif` | Multi-frame red channel (a different DNA locus adjacent to the green signal). |
+| `<stem>_purple.tif` | Multi-frame purple channel (a different DNA locus adjacent to the green signal). |
 
 All TIFFs must carry ImageJ-format metadata with `finterval` (frame interval in seconds) and `XResolution` (pixels per µm) tags.
 
@@ -108,8 +108,6 @@ All TIFFs must carry ImageJ-format metadata with `finterval` (frame interval in 
 | `run_pipeline_v3.py` | Stage 2 — MATLAB SPT + CSV export (uses bundled `matlab_deps/`) |
 | `match_m2DGaussian_to_reference.py` | Stage 3 — trajectory matching and final output |
 | `run_full_pipeline_v3.py` | Runs all three stages sequentially for one dataset |
-| `run_parallel_v2.12.py` | Runs all three stages in parallel for all 5 datasets |
-| `clean_outputs.py` | Deletes stale output CSVs before a fresh run |
 
 ---
 
@@ -124,22 +122,10 @@ python3 run_full_pipeline_v3.py "<path_to_analysis_dir>"
 Example:
 
 ```bash
-python3 run_full_pipeline_v3.py "/path/to/FOV5_analyzed/try_analysis"
+python3 run_full_pipeline_v3.py "example_data/try_analysis1"
 ```
 
 A log file `log_trajectory_v3.txt` is written to the analysis directory.
-
-### All 5 datasets in parallel
-
-```bash
-# Step 1 — remove stale outputs from previous runs
-python3 clean_outputs.py
-
-# Step 2 — run all 5 pipelines simultaneously
-python3 run_parallel_v2.12.py
-```
-
-Each dataset writes its own `log_trajectory_v2.12.txt`. The terminal prints a one-line summary per dataset when all finish.
 
 ---
 
@@ -151,7 +137,7 @@ All tunable parameters are at the top of `auto_roi_for_published_v2.12.py`.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `K_SIGNAL['green']` | `2.0` | Threshold multiplier for green channel: `mean + k × std` |
+| `K_SIGNAL['green']` | `2.0` | Threshold multiplier for green channel: `mean + k × std` . The values have been optimized to maximize signal detection.|
 | `K_SIGNAL['red']` | `0.5` | Threshold multiplier for red channel |
 | `K_SIGNAL['purple']` | `0.5` | Threshold multiplier for purple channel |
 
@@ -160,7 +146,7 @@ All tunable parameters are at the top of `auto_roi_for_published_v2.12.py`.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `NUCLEUS_SIGMA` | `2.0` | Gaussian blur σ (px) before Otsu thresholding of nucleus channel |
-| `NUCLEUS_OUTSIDE_FRAC` | `0.10` | Maximum fraction of frames a green locus may be outside the nucleus before it is rejected |
+| `NUCLEUS_OUTSIDE_FRAC` | `0.10` | Maximum fraction of frames a green locus may be outside the nucleus before it is rejected. The parameter has been introduced to increase tolerance for inaccurate nuclear mask generation for a small subset of timeframes. |
 | `FILL_RATIO` | `0.85` | Drift-correction fill detection: pixels below `75th-percentile × FILL_RATIO` on the image border are masked as fill |
 
 ### Spot detection
@@ -168,7 +154,7 @@ All tunable parameters are at the top of `auto_roi_for_published_v2.12.py`.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `MIN_SPOT_PX` | `10` | Minimum connected-component area (px) for a candidate to be accepted |
-| `N_MAX` | `5` | Maximum number of green loci to detect |
+| `N_MAX` | `5` | Maximum number of green loci to detect. Assuming no more than 5 real green DNA loci per cell. |
 | `PADDING` | `20` | Pixels added around the green trajectory bounding box on each side to define the per-locus ROI |
 
 ### Tracking constraints
@@ -176,17 +162,17 @@ All tunable parameters are at the top of `auto_roi_for_published_v2.12.py`.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `PIXEL_SIZE_UM` | `5.45` | Pixel size in px/µm (read from TIFF metadata; used to convert nm ↔ px) |
-| `INTER_FRAME_MAX_NM` | `500` | Maximum frame-to-frame displacement (nm) for purple tracking |
+| `INTER_FRAME_MAX_NM` | `500` | Maximum frame-to-frame displacement (nm) for purple tracking, assuming any DNA loci move a limited step per frame |
 | `INTER_FRAME_MAX_NM_RED` | `750` | Maximum frame-to-frame displacement (nm) for red tracking (relaxed; red loci are more mobile) |
-| `GREEN_PROX_MAX_UM` | `3.0` | Maximum distance (µm) from the green locus for a purple/red candidate to be accepted |
-| `SEED_MAX_FRAME` | `5` | Number of early frames searched to find the initial seed position |
+| `GREEN_PROX_MAX_UM` | `3.0` | Maximum distance (µm) from the green locus for a purple/red candidate to be accepted; assuming any purple or red loci will not be too far from green loci |
+| `SEED_MAX_FRAME` | `5` | Number of early frames searched to find the initial seed position. If signal not found in any of the first 5 frames, the signal is unlikely to be real |
 
 ### Adaptive k for merged blobs (overlap groups only)
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `MAX_BLOB_PX` | `120` | Connected-component area threshold (px) above which a blob is considered potentially merged |
-| `_ADAPTIVE_K_STEPS` | `[1.0, 1.5, 2.0]` | Progressive k values tried to split a large blob into sub-components |
+| `MAX_BLOB_PX` | `120` | Connected-component area threshold (px) above which a blob is considered potentially merged. When 2 real signals are close to each other, they might be detected as a connected large "blob". This parameter detects overly large blobs, and elevate k_signal locally to try spliting the blob into real signal clusters. |
+| `_ADAPTIVE_K_STEPS` | `[1.0, 1.5, 2.0]` | Progressive k values tried to split a large blob into sub-components. The adaptive K_signal only applies locally, and to all time frames, without compromising the sensitivity to detect weaker signals in other areas of the same image. |
 
 ### Matching (Stage 3)
 
@@ -230,7 +216,7 @@ All output files are written to the analysis directory.
 | `P_loci{N}_traj_m2DGaussian_cleaned.csv` | Final purple trajectory for locus N |
 | `R_loci{N}_traj_m2DGaussian_cleaned.csv` | Final red trajectory for locus N |
 
-All trajectory CSVs have three columns: `frame` (1-indexed), `x_nm`, `y_nm`.
+All trajectory CSVs have three columns: `frame` (1-indexed), `x_nm`, `y_nm`. The coordinates is relative to the whole .tif image, not to individual ROIs. 
 
 ### Log file
 
@@ -289,10 +275,11 @@ The matched MATLAB trajectory is written as the final `*_traj_m2DGaussian_cleane
 
 ---
 
-## Utility scripts
+## Validation scripts
+
+The output trajectory should be the same as manual and interactive analysis result produced by `spt.m`.
 
 | Script | Description |
 |--------|-------------|
-| `clean_outputs.py` | Deletes `*_cleaned.csv` and `*_rela2wholeimg.csv` from all 5 analysis directories before a fresh run |
-| `troubleshoot_loci2_red.py` | Frame-by-frame diagnostic for red singleton tracking; saves PNG overlays per frame to `diag_loci2_red/` |
-| `troubleshoot_merged_purple.py` | Tests four methods for separating merged purple blobs; read-only, no pipeline files modified |
+| `spt.m` | Interactive 2D Gaussian fitting code written by Yanyu Zhu. Taking any .tif image as input, generating .mat as output. |
+| `export_trajectories.py` | Run `python3 export_trajectories.py XX.mat` with the output from `spt.m` to generate .csv files with trajectories saved in matlab_trajectory/ |
