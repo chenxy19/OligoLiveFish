@@ -33,7 +33,7 @@ No other path configuration is needed. All MATLAB `.m` dependencies are bundled 
 6. [Parameters](#parameters)
 7. [Output files](#output-files)
 8. [Algorithm details](#algorithm-details)
-9. [Utility scripts](#utility-scripts)
+9. [Validation scripts](#validation-scripts)
 
 ---
 
