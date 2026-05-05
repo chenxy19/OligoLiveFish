@@ -54,21 +54,28 @@ output: numpy array of the FOV (T, C, Y, X) uint16
 6. return the array
 """
 def load_fov(path: Path) -> np.ndarray:
-    with ND2File(path) as f: # f is a numpy array that looks like a dictionary of axes and their values (e.g. T, C, Y, X) (keys) and their values (values)
-        arr = f.asarray() # get the array from the .nd2 file
+    """Load nd2 → (T, Z, C, Y, X) uint16, preserving all axes.
+    The nd2 library squeezes out size-1 axes — we reinsert them so the
+    array always has the same number of dims regardless of acquisition mode."""
+    with ND2File(path) as f:
+        arr = f.asarray()
         keys = list(f.sizes.keys())
 
     axes = [k.upper() for k in keys]
     print(f"  nd2 axes string: {''.join(axes)}, raw shape: {arr.shape}")
 
-    if 'Z' in axes: # the z-axis is the stack of images, so we max-project it to get a single image
-        z_ax = axes.index('Z')
-        arr = arr.max(axis=z_ax)
-        axes.pop(z_ax)
+    # Reinsert any size-1 axes the nd2 library squeezed out
+    for ax in ('T', 'Z', 'C'):
+        if ax not in axes:
+            arr = np.expand_dims(arr, axis=0)
+            axes.insert(0, ax)
+            print(f"  Reinserted size-1 '{ax}' axis (squeezed out by nd2 library)")
 
-    target = ['T', 'C', 'Y', 'X'] # the target axes are the time, channel, height, width
+    target = ['T', 'Z', 'C', 'Y', 'X']
     order = [axes.index(a) for a in target]
-    return np.transpose(arr, order).astype(np.uint16) # transpose the array to the target order
+    arr = np.transpose(arr, order).astype(np.uint16)
+    print(f"  Final shape TZCYX: {arr.shape}")
+    return arr
 
 """
 norm_u8() normalizes the image to the uint8 range (0-255) for the µSAM model
@@ -333,22 +340,22 @@ and zeros every pixel that belongs to any other nucleus across all T and C.
 """
 def crop_with_suppression(fov: np.ndarray, mask: np.ndarray,
                           all_masks: list, margin: int):
-    """Return (T, C, cropH, cropW) uint16 with all other nuclei zeroed."""
-    H, W = mask.shape
+    """Return (T, Z, C, cropH, cropW) uint16 with all other nuclei zeroed."""
+    T, Z, C, H, W = fov.shape
     rows, cols = np.where(mask)
     r0 = max(0, rows.min() - margin)
-    r1 = min(H, rows.max() + margin + 1)  # +1 because slice end is exclusive
+    r1 = min(H, rows.max() + margin + 1)
     c0 = max(0, cols.min() - margin)
-    c1 = min(W, cols.max() + margin + 1)  # +1 because slice end is exclusive
+    c1 = min(W, cols.max() + margin + 1)
 
     suppress = np.zeros((H, W), dtype=bool)
     for other in all_masks:
-        if other is mask:  # identity check — skips this exact mask object; == would do element-wise array comparison
+        if other is mask:
             continue
         suppress |= other
 
-    crop = fov[:, :, r0:r1, c0:c1].copy()  # .copy() detaches from fov — zeroing below must not mutate the source array
-    crop[:, :, suppress[r0:r1, c0:c1]] = 0  # boolean index broadcasts over all T and C
+    crop = fov[:, :, :, r0:r1, c0:c1].copy()
+    crop[:, :, :, suppress[r0:r1, c0:c1]] = 0
     return crop, (r0, r1, c0, c1)
 
 
@@ -417,7 +424,7 @@ def save_crop_grid(crops_info, nuc_u8, out_path: Path):
     axes = np.array(axes).reshape(-1)  # flatten 2D axes grid → 1D for uniform indexing
 
     for idx, (crop, bbox, mask) in enumerate(crops_info):
-        nuc_crop = crop[:, 0].max(axis=0).astype(float)
+        nuc_crop = crop[:, :, 0].max(axis=1).max(axis=0).astype(float) 
         ax = axes[idx]
         ax.imshow(nuc_crop, cmap='gray',
                   vmin=np.percentile(nuc_crop, 1),
@@ -448,8 +455,9 @@ def save_suppression_demo(crops_info, fov, deduped_masks, out_path: Path,
 
     for row, (crop, bbox, mask) in enumerate(crops_info[:n]):
         r0, r1, c0, c1 = bbox
-        raw_region  = fov[:, 0, r0:r1, c0:c1].max(axis=0).astype(float)
-        supp_region = crop[:, 0].max(axis=0).astype(float)
+        # max-project Z (axis 1) then T (axis 0)
+        raw_region  = fov[:, :, 0, r0:r1, c0:c1].max(axis=1).max(axis=0).astype(float)
+        supp_region = crop[:, :, 0].max(axis=1).max(axis=0).astype(float)
 
         vmin = np.percentile(raw_region[raw_region > 0], 1) if raw_region.max() > 0 else 0 # exclude zeroed suppression pixels from contrast floor 
         vmax = np.percentile(raw_region, 99)
@@ -474,16 +482,16 @@ def save_all_channels_demo(crops_info, out_path: Path, max_show=4):
     n = min(len(crops_info), max_show)
     if n == 0:
         return
-    n_chan = crops_info[0][0].shape[1]
+    n_chan = crops_info[0][0].shape[2]
     chan_labels = ['C0 Nucleus (DAPI)', 'C1 640nm', 'C2 488nm', 'C3 561nm']
 
     fig, axes = plt.subplots(n, n_chan, figsize=(n_chan * 2.8, n * 2.8))
     if n == 1:
-        axes = axes[np.newaxis, :]  # plt.subplots(1,n_chan) returns 1D; add dim for consistent [row,col] indexing
+        axes = np.atleast_2d(np.array(axes)).reshape(-1, n_chan)  # plt.subplots(1,n_chan) returns 1D; add dim for consistent [row,col] indexing
 
     for row, (crop, bbox, mask) in enumerate(crops_info[:n]):
         for ch in range(n_chan):
-            img = crop[:, ch].max(axis=0).astype(float)
+            img = crop[:, :, ch].max(axis=1).max(axis=0).astype(float)
             axes[row, ch].imshow(img, cmap='gray',
                                  vmin=np.percentile(img, 1),
                                  vmax=np.percentile(img, 99))
@@ -523,14 +531,16 @@ process_file() runs the full nucleus-cropping pipeline on one .nd2 FOV file.
 def process_file(nd2_path: Path, predictor, segmenter, args):
     print(f"\n── {nd2_path.name} ──")
 
-    fov = load_fov(nd2_path)
-    T, C, H, W = fov.shape
-    print(f"  Loaded: T={T} C={C} Y={H} X={W}")
+    fov = load_fov(nd2_path)          # (T, Z, C, Y, X)
+    T, Z, C, H, W = fov.shape
+    print(f"  Loaded: T={T} Z={Z} C={C} Y={H} X={W}")
 
-    ch_means = [fov[:, c].mean() for c in range(C)]
+    ch_means = [fov[:, :, c].mean() for c in range(C)]
     print(f"  Channel means: {[f'{m:.1f}' for m in ch_means]}")
 
-    nuc_avg = fov[:, args.nucleus_channel].mean(axis=0).astype(float)  # time-average: stationary real loci accumulate; diffuse unbound probes cancel out
+    # Max-project Z only for segmentation input — µSAM needs 2D
+    # The full Z info is preserved in fov for cropping and TIFF export
+    nuc_avg = fov[:, :, args.nucleus_channel].max(axis=1).mean(axis=0).astype(float)
     nuc_u8  = norm_u8(nuc_avg)
 
     from micro_sam.automatic_segmentation import automatic_instance_segmentation  # deferred import — µSAM has heavy import-time side effects; keep it after model load
@@ -624,7 +634,7 @@ def main():
 
     input_path = Path(args.input)
     if input_path.is_dir():
-        nd2_files = sorted(input_path.glob("*.nd2"))
+        nd2_files = sorted(input_path.rglob("*.nd2"))
         if not nd2_files:
             print(f"No .nd2 files found in {input_path}", file=sys.stderr)
             sys.exit(1)
