@@ -1,1 +1,10 @@
 pipeline/README_v2.md pipeline/pipeline_README.md pipeline/pipeline_README_v3.md pipeline/run_full_pipeline_v2.12.py pipeline/run_pipeline_v2.py
+
+data/
+
+exampe_data/
+
+farmshare/jobs/
+farmshare/logs/
+
+**/__pycache__/

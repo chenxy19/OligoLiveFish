@@ -96,7 +96,7 @@ Each analysis directory must contain the following files with a common stem `<st
 | `<stem>_red.tif` | Multi-frame red channel (a different DNA locus adjacent to the green signal). |
 | `<stem>_purple.tif` | Multi-frame purple channel (a different DNA locus adjacent to the green signal). |
 
-All TIFFs must carry ImageJ-format metadata with `finterval` (frame interval in seconds) and `XResolution` (pixels per µm) tags.
+TIFFs should carry ImageJ-format metadata with `finterval` (frame interval in seconds) and `XResolution` (pixels per µm) tags. If `finterval` is absent, provide the acquisition timing manually with `--frame-interval <seconds>` or `--frame-rate <Hz>`.
 
 ---
 
@@ -108,6 +108,7 @@ All TIFFs must carry ImageJ-format metadata with `finterval` (frame interval in 
 | `run_pipeline_v3.py` | Stage 2 — MATLAB SPT + CSV export (uses bundled `matlab_deps/`) |
 | `match_m2DGaussian_to_reference.py` | Stage 3 — trajectory matching and final output |
 | `run_full_pipeline_v3.py` | Runs all three stages sequentially for one dataset |
+| `embed_finterval_from_nd2.py` | Utility — reads ND2 acquisition timestamps and embeds ImageJ-style `finterval` into matching exported TIFFs |
 
 ---
 
@@ -125,7 +126,29 @@ Example:
 python3 run_full_pipeline_v3.py "example_data/try_analysis1"
 ```
 
+If the TIFF metadata does not contain `finterval`, pass the microscope/acquisition time step explicitly:
+
+```bash
+python3 run_full_pipeline_v3.py "example_data/try_analysis1" --frame-interval 0.6
+```
+
 A log file `log_trajectory_v3.txt` is written to the analysis directory.
+
+### Embed frame intervals from ND2 exports
+
+For directories containing matching `.nd2` files and TIFF export folders with the same stem, preview inferred frame intervals. Existing TIFF `finterval` values are preserved by default; missing values are filled from a filtered mean of the ND2 timestamp intervals to match ImageJ/Bio-Formats-style scalar timing:
+
+```bash
+python3 embed_finterval_from_nd2.py "/path/to/kenaj_nd2_tif"
+```
+
+Apply the metadata update to the direct TIFF files in each matching folder:
+
+```bash
+python3 embed_finterval_from_nd2.py "/path/to/kenaj_nd2_tif" --apply
+```
+
+Use `--overwrite` only if you intentionally want to replace existing TIFF `finterval` values.
 
 ---
 
@@ -182,7 +205,7 @@ These parameters are set inside `spt_batch.m`. Two are read from TIFF metadata; 
 
 | Parameter | Source | Description |
 |-----------|--------|-------------|
-| `f_rate` | `finterval` tag in ImageDescription | Frame rate (Hz) = 1 / finterval |
+| `f_rate` | `finterval` tag in ImageDescription, or `--frame-interval` / `--frame-rate` | Frame rate (Hz) = 1 / finterval |
 | `pixl_um` | `XResolution` TIFF tag | Pixel size (µm/px) = 1 / XResolution |
 
 **Auto-thresholded from image data:**

@@ -5,19 +5,23 @@ run_full_pipeline_v3.py — Standalone full analysis pipeline.
 Standalone version: all MATLAB dependencies are bundled in matlab_deps/ next to
 this script. No external SPT installation or hardcoded paths required.
 
-Steps:
+Default steps:
+  0. headless_Macro_first_steps_for_published.ijm — Fiji preprocessing from one cropped TIFF
   1. auto_roi_for_published_v2.12.py — detect green loci, output reference trajectories
                                        (joint seeding for overlapping ROIs)
   2. run_pipeline_v3.py              — run MATLAB SPT using bundled matlab_deps/
   3. match_m2DGaussian_to_reference.py — match MATLAB tracks to reference tracks
 
 Usage:
-    python3 run_full_pipeline_v3.py <try_analysis_dir>
+    python3 run_full_pipeline_v3.py <cropped_tif>
+    python3 run_full_pipeline_v3.py --no-fiji <try_analysis_dir>
 
 Example:
-    python3 run_full_pipeline_v3.py /path/to/FOV5_analyzed/try_analysis
+    python3 run_full_pipeline_v3.py "/path/to/example_cropped.tif"
+    python3 run_full_pipeline_v3.py --no-fiji /path/to/FOV5_analyzed/try_analysis
 """
 
+import argparse
 import sys
 import subprocess
 from datetime import datetime
@@ -28,6 +32,7 @@ HERE = Path(__file__).parent.resolve()
 V212_SCRIPT  = HERE / 'auto_roi_for_published_v2.12.py'
 SPT_SCRIPT   = HERE / 'run_pipeline_v3.py'
 MATCH_SCRIPT = HERE / 'match_m2DGaussian_to_reference.py'
+FIJI_MACRO   = HERE / 'headless_Macro_first_steps_for_published.ijm'
 
 
 class Tee:
@@ -52,7 +57,11 @@ def run(cmd: list):
     print(f"\n{'═'*70}")
     print('Running: ' + ' '.join(f'"{c}"' if ' ' in c else c for c in cmd))
     print(f"{'═'*70}")
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    except FileNotFoundError:
+        print(f"\n[ERROR] Command not found: {cmd[0]}")
+        sys.exit(127)
     for line in proc.stdout:
         sys.stdout.write(line)
     proc.wait()
@@ -61,15 +70,60 @@ def run(cmd: list):
         sys.exit(proc.returncode)
 
 
-def main():
-    if len(sys.argv) != 2:
-        print("Usage: python3 run_full_pipeline_v3.py <try_analysis_dir>")
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Run the Oligo LiveFISH full trajectory pipeline.'
+    )
+    parser.add_argument(
+        'input_path',
+        help='Cropped input TIFF, or an already-preprocessed analysis directory with --no-fiji.'
+    )
+    parser.add_argument(
+        '--no-fiji',
+        action='store_true',
+        help='Skip Fiji preprocessing and run the original full pipeline on an existing analysis directory.'
+    )
+    parser.add_argument(
+        '--fiji-bin',
+        default='fiji',
+        help='Fiji/ImageJ executable to use for preprocessing (default: fiji).'
+    )
+    return parser.parse_args()
+
+
+def analysis_dir_for_tif(tif_path: Path) -> Path:
+    return tif_path.with_suffix('')
+
+
+def prepare_analysis_dir(args) -> Path:
+    input_path = Path(args.input_path).resolve()
+
+    if args.no_fiji:
+        if not input_path.is_dir():
+            print(f"ERROR: --no-fiji expects an existing analysis directory: {input_path}")
+            sys.exit(1)
+        return input_path
+
+    if not input_path.is_file():
+        print(f"ERROR: expected a cropped .tif input file: {input_path}")
+        print("       Use --no-fiji to run the original pipeline on a preprocessed directory.")
+        sys.exit(1)
+    if input_path.suffix.lower() not in ('.tif', '.tiff'):
+        print(f"ERROR: expected a .tif/.tiff input file: {input_path}")
+        sys.exit(1)
+    if not FIJI_MACRO.is_file():
+        print(f"ERROR: Fiji macro not found: {FIJI_MACRO}")
         sys.exit(1)
 
-    analysis_dir = Path(sys.argv[1]).resolve()
-    if not analysis_dir.is_dir():
-        print(f"ERROR: not a directory: {analysis_dir}")
-        sys.exit(1)
+    analysis_dir = analysis_dir_for_tif(input_path)
+    analysis_dir.mkdir(exist_ok=True)
+    return analysis_dir
+
+
+def main():
+    args = parse_args()
+    input_path = Path(args.input_path).resolve()
+    analysis_dir = prepare_analysis_dir(args)
 
     log_path = analysis_dir / 'log_trajectory_v3.txt'
     with open(log_path, 'w') as log_file:
@@ -79,6 +133,17 @@ def main():
             print(f"Pipeline started : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"Analysis dir     : {analysis_dir}")
             print(f"Log file         : {log_path}")
+
+            if not args.no_fiji:
+                print(f"Input TIFF       : {input_path}")
+                print(f"Fiji macro       : {FIJI_MACRO}")
+                run([
+                    args.fiji_bin,
+                    '--headless',
+                    '-macro',
+                    str(FIJI_MACRO),
+                    str(input_path),
+                ])
 
             nucleus_files = sorted(analysis_dir.glob('*_Nucleus.tif'))
             if not nucleus_files:
