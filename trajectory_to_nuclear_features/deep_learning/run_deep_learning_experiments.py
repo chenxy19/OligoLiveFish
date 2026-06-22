@@ -1,5 +1,5 @@
 """
-traj_dl_extended.py
+run_deep_learning_experiments.py
 Tasks 1–5: multi-seed stability · input representations · augmentation · RMSE/MAE · final table
 
 Task 1 — Multiple seeds (0, 1, 2): all 6 arch variants, final model only per seed
@@ -12,6 +12,7 @@ Task 5 — Final comparison table
 """
 
 from pathlib import Path
+import os
 import numpy as np
 import pandas as pd
 import torch
@@ -25,21 +26,20 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # ── Paths ──────────────────────────────────────────────────────────────────
-# Set the DATA_ROOT environment variable to point at the "data for modeling"
-# directory, e.g.  export DATA_ROOT=/path/to/data\ for\ modeling
-# Falls back to a local ./data directory if unset.
-import os
-BASE      = Path(os.environ.get("DATA_ROOT", "./data"))
-LOCUS_CSV = BASE / "oligolivefish_traj_model/chr3/final_master_locus_features.csv"
-NUC_CSV   = BASE / "oligolivefish_traj_model/chr3/final_master_nucleus_features.csv"
-B1_MAP    = BASE / "oligo_traj_copied/Nuc_number_mapping.csv"
-C3_MAP    = BASE / "oligo_traj_copied_chr3/Nuc_number_mapping.csv"
-B1_DIR    = BASE / "oligo_traj_copied"
-C3_DIR    = BASE / "oligo_traj_copied_chr3"
-OUT_DIR   = BASE / "oligolivefish_traj_model/first_batch"
+# By default, use the small derived modeling dataset shipped with this repo.
+# Set DATA_ROOT to point at another directory with the same layout.
+MODULE_ROOT = Path(__file__).resolve().parents[1]
+BASE      = Path(os.environ.get("DATA_ROOT", MODULE_ROOT / "data")).resolve()
+LOCUS_CSV = BASE / "chr3/locus_feature_table.csv"
+NUC_CSV   = BASE / "chr3/nucleus_feature_table.csv"
+B1_MAP    = BASE / "trajectories/batch1/Nuc_number_mapping.csv"
+C3_MAP    = BASE / "trajectories/chr3_batch/Nuc_number_mapping.csv"
+B1_DIR    = BASE / "trajectories/batch1"
+C3_DIR    = BASE / "trajectories/chr3_batch"
+OUT_DIR   = Path(os.environ.get("OUTPUT_DIR", MODULE_ROOT / "outputs" / "deep_learning")).resolve()
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-ENG_CSV   = BASE / "oligolivefish_traj_model/chr3/all_folder_data_input_output.csv"
+ENG_CSV   = BASE / "chr3/engineered_feature_table.csv"
 
 # ── Config ─────────────────────────────────────────────────────────────────
 TARGETS = [
@@ -76,7 +76,7 @@ print(f"Device: {DEVICE}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# DATA LOADING  (identical to traj_dl_model.py)
+# DATA LOADING
 # ═══════════════════════════════════════════════════════════════════════════
 
 """

@@ -2,23 +2,24 @@
 
 ## OligoLiveFISH — Trajectory → Nuclear Feature Prediction (v3, extended)
 
-**Script:** `traj_dl_extended.py`  
+**Script:** `run_deep_learning_experiments.py`  
 **Date:** May 2026  
-**Results CSV:** `data for modeling/oligolivefish_traj_model/first_batch/dl_extended_raw_results.csv` (315 rows)  
-**Summary CSV:** `data for modeling/oligolivefish_traj_model/first_batch/dl_final_comprehensive_results.csv`
+**Results CSV:** `outputs/deep_learning/dl_extended_raw_results.csv` (315 rows)  
+**Summary CSV:** `outputs/deep_learning/dl_final_comprehensive_results.csv`
 
 ### Running
 
-Set the `DATA_ROOT` environment variable to your `data for modeling` directory
-(the script and notebooks fall back to `./data` if it is unset), then run:
+The script uses the repo-local `trajectory_to_nuclear_features/data/` directory by
+default. Set `DATA_ROOT` only if you want to use a different directory with the
+same layout. Run from the `trajectory_to_nuclear_features/` directory:
 
 ```bash
-export DATA_ROOT="/path/to/data for modeling"
-python traj_dl_extended.py
+python deep_learning/run_deep_learning_experiments.py
 ```
 
-The two notebooks (`traj_dl_arch_sweep.ipynb`, `traj_mlp_engineered.ipynb`) read the
-same `DATA_ROOT` variable locally, or mount Google Drive when run on Colab.
+The two notebooks (`deep_learning_architecture_sweep.ipynb`,
+`engineered_feature_mlp_baseline.ipynb`) read the same `DATA_ROOT` variable
+locally, or mount Google Drive when run on Colab.
 
 ---
 
