@@ -98,5 +98,14 @@ The full workflow uses a mix of Python, Fiji/ImageJ, and MATLAB:
 - Fiji/ImageJ for trajectory-extraction preprocessing and drift correction.
 - MATLAB for 2D Gaussian single-particle tracking.
 
+Install the Python dependencies with:
+
+```bash
+pip install -r requirements.txt
+```
+
+For GPU-specific PyTorch builds, install the appropriate `torch` package from
+the official PyTorch instructions before or after installing this file.
+
 The trajectory-extraction runner bundles its MATLAB helper code under
 `trajectory_extraction/internal/`; no separate SPT code checkout is required.
