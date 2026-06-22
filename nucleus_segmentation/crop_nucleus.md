@@ -168,7 +168,8 @@ conda run -n livefish python "code (being modified)/save_crops.py" \
 ```
 
 TIFFs open in Fiji with per-channel colors matching the original .nd2. Each file is a
-(T, Z, C, Y, X) hyperstack ready for the downstream `headless_Macro_first_steps_for_published.ijm`.
+(T, Z, C, Y, X) hyperstack ready for the downstream
+`trajectory_extraction/run_full_pipeline_v3.py` trajectory-extraction runner.
 
 Each `_metadata.json` sidecar contains:
 - `source_nd2` — absolute path back to the originating FOV file
