@@ -1,19 +1,20 @@
-# OligoLiveFish
+# OligoLiveFish-ML 
 
-OligoLiveFish is an analysis and modeling repository for live-cell
+OligoLiveFish-ML is an analysis and modeling repository for live-cell
 Oligo-LiveFISH chromatin dynamics data. It provides a workflow for turning
 multi-channel microscopy movies into cleaned single-particle DNA trajectories,
 then using those trajectories to model nuclear and local chromatin features.
 
-The repository is organized around three stages:
+The repository is organized around four stages:
 
 1. `nucleus_segmentation/` segments nuclei in `.nd2` field-of-view files and
    exports one single-nucleus TIFF per crop.
-2. `trajectory_extraction/` runs the single-nucleus trajectory extraction
+2. `trajectory_extraction/` runs the single-nucleus DNA locus trajectory extraction
    workflow: Fiji preprocessing, reference trajectory detection, MATLAB 2D
    Gaussian fitting, and reference-based filtering of real DNA signals in each
    fluorescence channel.
-3. `trajectory_to_nuclear_features/` contains traditional machine-learning and
+3. `Cellular_feature_extraction/` extracts the cellular and nuclear features from single-nucleus TIFF files.
+4. `trajectory_to_nuclear_features/` contains traditional machine-learning and
    deep-learning experiments for predicting nuclear and local chromatin
    features from trajectory dynamics.
 
