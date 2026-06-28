@@ -282,16 +282,16 @@ Applied on-the-fly during training only (never at test time), Cartesian input on
 | Target               | RF (random split) | RF-eng tuned* | MLP-eng        | Best DL                        | Signal    |
 | -------------------- | ----------------- | ------------- | -------------- | ------------------------------ | --------- |
 | local_intensity_mean | 0.259             | 0.620         | −0.013 ± 0.055 | **0.602 ± 0.173** (CNN-medium) | ✓ real    |
-| nuc_intensity_mean   | 0.255             | 0.657         | −0.000 ± 0.084 | **0.614 ± 0.126** (CNN-medium) | ✓ stable  |
+| nuc_intensity_mean   | 0.255             | 0.518         | −0.000 ± 0.084 | **0.614 ± 0.126** (CNN-medium) | ✓ stable  |
 | area_um2             | 0.393             | 0.252         | −0.064 ± 0.011 | 0.086 ± 0.285 (LSTM-large)     | uncertain |
 | local_to_nuc_ratio   | —                 | 0.247         | −0.013 ± 0.060 | 0.096 ± 0.290 (LSTM-small)     | uncertain |
-| dist_to_membrane_nm  | —                 | 0.165         | 0.003 ± 0.112  | 0.006 ± 0.090 (LSTM-medium)    | ≈ zero    |
+| dist_to_membrane_nm  | —                 | 0.190         | 0.003 ± 0.112  | 0.006 ± 0.090 (LSTM-medium)    | weak RF   |
 | dist_to_centroid_nm  | 0.050             | 0.132         | −0.138 ± 0.098 | 0.049 ± 0.038 (LSTM-medium)    | ≈ zero    |
-| norm_radial_pos      | —                 | 0.109         | −0.087 ± 0.044 | −0.022 ± 0.083 (CNN-medium)    | ≈ zero    |
+| norm_radial_pos      | —                 | 0.056         | −0.087 ± 0.044 | −0.022 ± 0.083 (CNN-medium)    | ≈ zero    |
 
 
 RF (random split): batch 1 only (515 traj), random row split — partially inflated by same-nucleus leakage.  
-*RF-eng tuned: Kevin's RandomizedSearchCV + GroupKFold on 18 engineered features, nucleus-level split, single seed (random_state=42) from the `grouped_model_comparison.csv`. MLP-eng and Best DL use nucleus-level split, mean ± std over 3 seeds.
+*RF-eng tuned: RandomizedSearchCV + GroupKFold on 18 engineered features, nucleus-level split, single seed (random_state=42) from `data/chr3/traditional_ml_results/grouped_model_comparison.csv`, regenerated in the current NumPy 2 environment. MLP-eng and Best DL use nucleus-level split, mean ± std over 3 seeds.
 
 ---
 
@@ -309,17 +309,17 @@ MLP-eng (nucleus-level)         ← isolates architecture contribution
 Best DL (nucleus-level)         ← isolates representation contribution
 ```
 
-**Finding:** MLP-eng ≈ 0 for intensity targets while both tuned RF-eng (0.62) and Best DL (0.60) succeed. The signal is not recoverable by a neural net on engineered summaries — it requires either the raw trajectory representation (DL) or a tree-based model with the right inductive bias (RF). The DL advantage over tuned RF is methodological convenience (no feature engineering required), not a performance gain.
+**Finding:** MLP-eng ≈ 0 for intensity targets while tuned RF-eng and Best DL both recover compaction signal. RF-eng matches Best DL for local_intensity_mean (0.620 vs. 0.602), while Best DL is stronger for nuc_intensity_mean (0.614 vs. 0.518). The signal is not recoverable by a neural net on engineered summaries — it requires either the raw trajectory representation (DL) or a tree-based model with the right inductive bias (RF). The DL advantage over tuned RF is partly methodological convenience (no feature engineering required) and partly target-dependent performance.
 
 ---
 
 ## 12. Key Findings
 
-1. **Raw trajectory dynamics encode chromatin compaction** (intensity targets, R² ≈ 0.60), but **not spatial position** within the nucleus (positional targets, R² ≈ 0 across all models).
+1. **Raw trajectory dynamics encode chromatin compaction** (intensity targets, R² ≈ 0.60), while spatial-position targets are weak and model-dependent. Tuned RF captures modest signal for dist_to_membrane_nm and dist_to_centroid_nm, but raw-step DL remains near zero for these positional targets.
 2. **Single-seed evaluation is unreliable at this sample size.** CNN-large with one lucky seed gave R²=0.684 for local_intensity_mean; multi-seed gives 0.484 ± 0.320. CNN-medium is both more accurate (0.602) and more stable (±0.173).
 3. **The leakage finding:** The original random-split RF R²=0.393 for area_um2 collapses to 0.252 under a properly tuned nucleus-level split (and to −0.108 ± 0.037 for our untuned 3-seed RF). A substantial fraction of the original reported advantage was same-nucleus information leakage; the remainder survives with proper tuning.
 4. **Augmentation counterintuitively hurts intensity targets** (ΔR² = −0.179 for local_intensity_mean). Time reversal disrupts the temporal autocorrelation structure that carries the compaction signal. It slightly helps geometric targets (+0.014 to +0.058) where rotational symmetry is more relevant.
-5. **Combined representation wins for CNN; Cartesian wins for LSTM.** CNNs can selectively use features per channel--apparantly LSTMs can't filter noisy additional features effectively at small N.
+5. **Combined representation wins for CNN; Cartesian wins for LSTM.** CNNs can selectively use features per channel, whereas LSTMs appear less able to filter noisy additional features effectively at small N.
 
 ---
 
@@ -327,6 +327,6 @@ Best DL (nucleus-level)         ← isolates representation contribution
 
 Intensity (local_intensity_mean, nuc_intensity_mean) is a proxy for local chromatin compaction. Dense chromatin confines the locus, producing sub-diffusive motion with small, autocorrelated step sizes. The CNN learns this temporal autocorrelation pattern directly from the raw step vector sequence — a pattern that is washed out when the trajectory is compressed into 18 scalar summary statistics.
 
-Spatial position (membrane distance, centroid distance, radial position) leaves no trace in step vectors, which are relative displacements. The model cannot reconstruct an absolute nuclear coordinate from local dynamics alone.
+Spatial position (membrane distance, centroid distance, radial position) is weakly represented in raw step vectors, which are relative displacements rather than absolute coordinates. The raw-step DL models therefore cannot reliably reconstruct nuclear location from local dynamics alone. Tuned RF on engineered summaries recovers modest, target-dependent signal for some geometric targets, likely from correlations between trajectory statistics and nuclear morphology rather than direct coordinate information.
 
 ---
